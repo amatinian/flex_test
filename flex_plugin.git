@@ -1,0 +1,130 @@
+import React from 'react';
+import { VERSION } from '@twilio/flex-ui';
+import { FlexPlugin } from 'flex-plugin';
+
+import CustomTaskListContainer from './components/CustomTaskList/CustomTaskList.Container';
+import reducers, { namespace } from './states';
+
+const PLUGIN_NAME = 'SamplePlugin';
+
+
+const ADD_DEVICES = 'ADD_DEVICES_BM';
+const UPDATE_DEVICE = 'UPDATE_DEVICE_BM';
+const REMOVE_DEVICE = 'REMOVE_DEVICE_BM';
+const actions = { ADD_DEVICES, REMOVE_DEVICE, UPDATE_DEVICE };
+
+const reducer_twilio = (state = {}, action) => {
+  switch (action.type) {
+    case ADD_DEVICES:
+      //console.log("ADDING DEVICE!!!")
+      return action.payload;
+    case UPDATE_DEVICE:
+      return state[action.payload.key] ? { ...state } : { ...state, [action.payload.key]: action.payload };
+    case REMOVE_DEVICE:
+      const { [action.payload]: removedItem, ...remainingDevices } = state;
+      return remainingDevices;
+    default:
+      return state;
+  }
+};
+
+
+
+
+
+export default class SamplePlugin extends FlexPlugin {
+  constructor() {
+    super(PLUGIN_NAME);
+  }
+
+  /**
+   * This code is run when your plugin is being started
+   * Use this to modify any UI components or attach to the actions framework
+   *
+   * @param flex { typeof import('@twilio/flex-ui') }
+   * @param manager { import('@twilio/flex-ui').Manager }
+   */
+  init(flex, manager) {
+    this.registerReducers(manager);
+
+    manager.store.addReducer('devices', reducer_twilio)
+    //console.error("+++++ STORE ++++++")
+
+    manager.store.dispatch({type: 'ADD_DEVICES', payload: "some kind of payload"})
+    console.log(manager.store.getState())
+    //manager.store.dispatch('ADD_DEVICES', 'BLAH!')
+
+  manager.chatClient.channels.on("messageAdded", payload => {
+
+    const media = flex.AudioPlayerManager.play({
+      url: "/ding.mp3",
+      repeatable: false
+  },
+  (error) => {
+      console.error(error)
+  })
+
+  })
+
+
+  
+
+  console.error("======== MANAGER OBJECT ==========")
+  console.log(manager)
+    flex.Actions.addListener("beforeMonitorCall", (payload, abortFunction) => {
+      console.log("++++++++BEFORE MONITOR CALL PAYLOAD ++++++")
+      
+      console.log(payload)
+          
+  });
+
+    console.log("==========store============")
+    console.log(manager.store.getState())
+    flex.Actions.replaceAction("MonitorCall", (payload, original) =>
+    {
+        console.log("++++++++++ MONITOR CALL PAYLOAD ++++++++++")
+        //var newFromParam = {From: "+123"}
+        //console.log("Printing Task Sid")
+        //console.log(payload.task._source.task_sid)
+        //console.log("Printing Reservation Sid")
+        //console.log(payload.sid)
+        //console.log("From Parameter")
+        //console.log(newFromParam)
+        //console.log("Now Executing Monitor")
+        manager.workerClient.monitor(payload.task._source.task_sid, payload.sid, {From: "+123"})
+        
+        original(payload)
+    })
+
+    flex.Actions.replaceAction("AcceptTask", (payload, original) => {
+  
+      console.error("=================== REPLACED ACTION =======================")
+      var number = "sip:+0999999999@twilio.bleh.dude.com:50000;user=phone";
+         if((payload.task.attributes.from.match(/^sip:/) && (number.match(/:\d+;/) || number.match(/:\d+$/))) || payload.task.attributes.from.match(/^client:/))
+         {
+              var indexOfColumn = number.search(/:\d+$|:\d+;/);
+              console.log(number.slice(0, indexOfColumn))
+              console.error("<<<<<<< ADDING CONF OPTIONS >>>>>>")
+              console.log(payload);
+              payload.conferenceOptions.from = "+123"
+              //payload.conferenceOptions.from = "sip:admin@twilio.com";
+              original(payload);
+        }
+    });
+  }
+
+  /**
+   * Registers the plugin reducers
+   *
+   * @param manager { Flex.Manager }
+   */
+  registerReducers(manager) {
+    if (!manager.store.addReducer) {
+      // eslint: disable-next-line
+      console.error(`You need FlexUI > 1.9.0 to use built-in redux; you are currently on ${VERSION}`);
+      return;
+    }
+
+    manager.store.addReducer(namespace, reducers);
+  }
+}
